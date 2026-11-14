@@ -110,12 +110,49 @@ environments:
 
 ## Usage
 
+Local development (MLX backend via mlx-lm, a dev-only dependency):
+
 ```bash
 uv run grade \
+  --backend mlx \
+  --model-path mlx-community/Qwen3.5-9B-MLX-4bit \
+  --input-dir submissions \
+  --output-dir results \
+  --course-config course_configs/course-a.yaml
+```
+
+Production on Roihu (vLLM backend; no uv — the batch job runs the repo-root
+[grade.py](grade.py) with the scratch venv's interpreter):
+
+```bash
+srun /scratch/project_1234/venv-siivila/bin/python grade.py \
+  --backend vllm \
   --model-path /scratch/project_1234/vllm-models/production-model \
   --input-dir "$TMPDIR/submissions" \
   --output-dir "$TMPDIR/results" \
   --course-config course_configs/course-a.yaml
+```
+
+### Production setup (CSC Roihu)
+
+One-time environment setup on Roihu (no uv — pip into the scratch venv):
+
+```bash
+module load pytorch
+python -m venv --system-site-packages /scratch/project_1234/venv-siivila
+export PIP_CACHE_DIR=/scratch/project_1234/pip-cache   # keep $HOME clean
+/scratch/project_1234/venv-siivila/bin/pip install pydantic pyyaml
+# Check what the pytorch module already provides, install only the rest:
+/scratch/project_1234/venv-siivila/bin/python -c "import torch, vllm" \
+  || /scratch/project_1234/venv-siivila/bin/pip install vllm
+```
+
+Submit the batch job (see the header of [slurm/grade.slurm](slurm/grade.slurm)
+for all configuration variables):
+
+```bash
+sbatch slurm/grade.slurm                 # single GPU
+sbatch --gres=gpu:4 slurm/grade.slurm    # more GPUs for parallel evaluation
 ```
 
 ## Evaluation and testing

@@ -1,13 +1,13 @@
-# Spec Delta
+# slurm-batch-execution Specification
 
 ## Purpose
 
 Defines how the analysis CLI is executed as a Slurm batch job on CSC Roihu, including the data-protection rules that confine student data to job-local storage.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Slurm batch script
-The project SHALL provide a Slurm batch script that runs `uv run grade` on a CSC Roihu GH200 node, and the script SHALL support additional GPUs for parallel evaluation to reduce wall-clock time.
+The project SHALL provide a Slurm batch script that runs the CLI on a CSC Roihu GH200 node via `srun python grade.py` using the scratch venv's interpreter (uv is not used on Roihu), and the script SHALL support additional GPUs for parallel evaluation to reduce wall-clock time.
 
 #### Scenario: Submitting a job
 - **WHEN** the user submits the batch script with `sbatch` on Roihu
@@ -36,7 +36,7 @@ The job SHALL export only intentionally retained, validated results and reports 
 - **THEN** only the validated result JSON files and generated reports are copied out of `$TMPDIR` to the designated results location
 
 ### Requirement: Isolated Roihu Python environment
-The job SHALL use a dedicated virtual environment under `/scratch/project_1234/venv-siivila/` (built on `module load pytorch` when system packages suffice) with a custom pip cache location, and SHALL NOT install packages into `$HOME`.
+The job SHALL use a dedicated virtual environment under `/scratch/project_1234/venv-siivila/` (built on `module load pytorch` when system packages suffice, with dependencies pip-installed) with a custom pip cache location, and SHALL NOT install packages into `$HOME`.
 
 #### Scenario: Home directory untouched
 - **WHEN** the job environment is created or the job runs

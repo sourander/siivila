@@ -1,16 +1,16 @@
-# Spec Delta
+# grade-cli Specification
 
 ## Purpose
 
 Defines the `grade` command-line interface through which teachers and batch jobs run evidence analysis of student submissions, identically in local development and on CSC Roihu.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: CLI entry point
-The system SHALL provide a `grade` command runnable via `uv run grade` that starts the analysis pipeline.
+The system SHALL provide a `grade` command that starts the analysis pipeline: runnable via `uv run grade` in local development and via `srun python grade.py` direct script invocation on Roihu, both reaching the same entry point.
 
 #### Scenario: Invoking the CLI with all required arguments
-- **WHEN** the user runs `uv run grade --model-path <path> --input-dir <dir> --output-dir <dir> --course-config <file>` with valid arguments
+- **WHEN** the user runs the CLI with `--model-path <path> --input-dir <dir> --output-dir <dir> --course-config <file>` with valid arguments
 - **THEN** the system loads the model, processes the submissions in the input directory, and writes results to the output directory
 
 #### Scenario: Help output
@@ -33,11 +33,11 @@ The CLI SHALL require `--model-path`, `--input-dir`, `--output-dir`, and `--cour
 - **THEN** the system exits with a non-zero code and reports the validation error
 
 ### Requirement: Environment parity
-The same CLI, arguments, and exit behavior SHALL run unchanged in local development (macOS, Apple Silicon) and in production (CSC Roihu via Slurm), with environment differences expressed only through argument values and environment variables.
+The same CLI, arguments, and exit behavior SHALL run unchanged in local development (macOS, Apple Silicon, MLX backend via `uv run grade`) and in production (CSC Roihu via Slurm, vLLM backend via `srun python grade.py`), with environment differences expressed only through argument values and environment variables.
 
-#### Scenario: Same command on both environments
+#### Scenario: Same code path on both environments
 - **WHEN** a Slurm job and a local developer invoke the CLI with equivalent arguments
-- **THEN** both invocations execute the same workflow code path, differing only in model path and directories
+- **THEN** both invocations execute the same workflow code path, differing only in backend, model path, and directories
 
 ### Requirement: Course configuration file
 The CLI SHALL load course configuration from a YAML file validated against a schema; the configuration SHALL be able to list required exercises, weekly themes, and the official course book for use by later criteria.

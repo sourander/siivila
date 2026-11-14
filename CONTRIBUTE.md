@@ -9,6 +9,14 @@ uv sync
 uv run pytest tests/unit    # unit tests run without a model
 ```
 
+> **Inference backends:** all model access goes through the `ModelBackend`
+> protocol — `FakeBackend` for unit tests (no model, no framework imports),
+> `MLXBackend` (mlx-lm, dev-only dependency) for local runs on Apple Silicon,
+> `VllmBackend` for Roihu production. vLLM does not pip-install on macOS (its
+> PyPI metadata assumes CUDA; verified 2026-11-14), which is why local runs
+> use MLX. Select with `--backend {auto,mlx,vllm}`; `auto` prefers vLLM and
+> falls back to MLX.
+
 Two environments run the same code:
 
 - **Local** (macOS, Apple Silicon): development, unit/integration/smoke tests with a small model. Optional Langfuse tracing activates via environment variables.

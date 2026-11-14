@@ -1,0 +1,32 @@
+# Example course configuration.
+# Criteria use this to know what a submission is expected to contain:
+# which exercises must show findings, which weekly themes must be treated
+# in depth, and which official course book (if any) should be referenced.
+
+course_name: "Example Course A"
+
+# Exercises whose findings must appear in the submission.
+required_exercises:
+  - "Week 1 exercise: environment setup and first analysis"
+  - "Week 3 exercise: comparing two data sources"
+  - "Week 5 exercise: replicating a published result"
+
+# Weekly themes that must be treated in depth.
+weekly_themes:
+  - "Week 1: Introduction and tooling"
+  - "Week 2: Data collection and quality"
+  - "Week 3: Exploratory analysis"
+  - "Week 4: Statistical reasoning"
+  - "Week 5: Reproducibility"
+  - "Week 6: Visualization"
+  - "Week 7: Ethics and privacy"
+  - "Week 8: Communication of results"
+  - "Week 9: Reflection and synthesis"
+
+# The official course book. Remove this section if the course has none.
+course_book:
+  title: "Doing Data Science"
+  authors:
+    - "Cathy O'Neil"
+    - "Rachel Schutt"
+  edition: "1st"

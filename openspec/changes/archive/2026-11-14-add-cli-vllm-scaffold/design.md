@@ -20,12 +20,16 @@ The repo is a bare `uv` scaffold (`pyproject.toml` with a `siivila` entry point,
 
 ## Decisions
 
-### Direct vLLM offline API behind a small backend protocol
-Use `vllm.LLM` (offline inference) directly, per the handoff — no OpenAI-compatible server, no SSH tunnel. Wrap it behind a minimal `InferenceBackend` protocol (e.g. `generate(prompts, schema) -> outputs`) so that:
-- unit tests run with a fake backend (handoff: "unit tests run without a model");
-- the later LangGraph workflow depends on the protocol, not on vLLM specifics.
+### Three inference backends behind one protocol
+The core application is platform-independent (uv-managed; Pydantic, LangGraph, PDF processing) and talks to models only through a `ModelBackend` protocol (`generate(prompts, schema) -> outputs`):
 
-**Alternative:** calling `vllm.LLM` inline in the CLI — rejected; it would make the "no model in unit tests" requirement impossible and couple orchestration to vLLM.
+- **FakeBackend** — in-memory, unit tests (no model, no framework imports)
+- **MLXBackend** — local macOS runs and integration tests, via `mlx-lm` (dev-only dependency; native Apple Silicon GPU inference)
+- **VLLMBackend** — Roihu production, direct `vllm.LLM` offline API, ~64K context, guided decoding
+
+No OpenAI-compatible server or SSH tunnel anywhere. The CLI selects the backend via `--backend {auto,mlx,vllm}`, defaulting to `auto` (prefer vLLM, fall back to MLX). Rationale for MLX locally: vLLM cannot be pip-installed on macOS (its PyPI metadata assumes CUDA — verified 2026-11-14), while mlx-lm is a first-class Apple Silicon citizen.
+
+**Alternatives considered:** calling `vllm.LLM` inline (rejected — couples orchestration to vLLM and makes model-free unit tests impossible); a vLLM source build on macOS (rejected — long fragile compile for a dev-only runtime).
 
 ### stdlib argparse for the CLI
 The CLI has four options and no subcommands yet; `argparse` covers this with zero added dependencies. Typer/click were considered and rejected for now to keep the dependency footprint small (limited bandwidth); migrating later is cheap because argument parsing is isolated in one module.
@@ -40,13 +44,13 @@ For this change the pipeline does: validate args → load course config → scan
 Observability activates only when Langfuse environment variables are set; otherwise the code path is a no-op and the package is an optional (extra) dependency, so Roihu installs need not include it.
 
 ### Roihu environment: venv with `--system-site-packages` on top of `module load pytorch`
-Create `/scratch/project_1234/venv-siivila/` with `python -m venv --system-site-packages` after `module load pytorch`, so CUDA-enabled torch/vLLM builds from the module are reused and only missing packages are pip-installed. Set `PIP_CACHE_DIR` (and `UV_CACHE_DIR`) to a `/scratch` path to avoid filling the `$HOME` quota. Model weights are read-only from `/scratch/project_1234/vllm-models/`.
+Create `/scratch/project_1234/venv-siivila/` with `python -m venv --system-site-packages` after `module load pytorch`, so CUDA-enabled torch/vLLM builds from the module are reused and only missing packages (pydantic, pyyaml, vllm if absent) are pip-installed. Set `PIP_CACHE_DIR` to a `/scratch` path to avoid filling the `$HOME` quota. Model weights are read-only from `/scratch/project_1234/vllm-models/`. **uv is not used on Roihu**: the batch job runs the CLI as `srun "$VENV/bin/python" grade.py --args`, where `grade.py` is a thin repo-root script that puts `src/` on `sys.path` and calls the same entry point as `uv run grade` — no package build step needed in the job.
 
 ### Slurm script as a parameterized template
 One `slurm/grade.slurm` script with `#SBATCH` directives (GH200 partition, GPU count as a variable for parallel evaluation) that:
 1. clones or `git pull`s the public repo into `$TMPDIR`;
 2. copies input PDFs into `$TMPDIR` (fake-data stage: from a known scratch location; the pre-signed URL pipeline is deferred);
-3. activates the scratch venv and runs `uv run grade` with all work dirs under `$TMPDIR`;
+3. runs `srun "$VENV/bin/python" grade.py` (the scratch venv interpreter, no uv) with all work dirs under `$TMPDIR`;
 4. exports only validated result JSON / reports to the project application dir;
 5. removes job-local data via a `trap ... EXIT` so cleanup also runs on failure.
 
@@ -54,8 +58,9 @@ One `slurm/grade.slurm` script with `#SBATCH` directives (GH200 partition, GPU c
 
 ## Risks / Trade-offs
 
-- **vLLM on Apple Silicon is CPU-only/experimental (no Metal/CUDA GPU support), and GH200 nodes are aarch64+CUDA** → Treat local vLLM as a smoke-test runtime with a small model; production correctness/perf validated on Roihu. If local vLLM install proves unworkable, the backend protocol allows a temporary local stand-in without touching the specs.
-- **vLLM install size conflicts with the current limited bandwidth** → Implementation proceeds code-first with unit tests against the fake backend; `uv add vllm` and smoke tests with a real model are deferred until bandwidth allows (still within this change's tasks).
+- **vLLM cannot be pip-installed on macOS (verified 2026-11-14)** — current releases require `nvidia-cudnn-frontend` (no darwin wheel, no sdist), older releases pin torch versions without `cp314` wheels → Resolved by the three-backend design: local runs use MLXBackend (mlx-lm, native Apple Silicon GPU); vLLM is production-only on GH200 (aarch64+CUDA).
+- **MLX has no guided decoding** — schema enforcement locally is prompt + Pydantic validation + bounded retry, a weaker guarantee than vLLM's structured outputs → Acceptable for smoke/integration tests; production output correctness is enforced by vLLM guided decoding and measured by the golden set (later phase). Small local models may occasionally exhaust retries on strict schemas; keep local smoke schemas simple.
+- **vLLM install size conflicts with limited bandwidth** → vLLM is never installed on the dev machine; mlx-lm is a modest dev-only dependency.
 - **Roihu module contents unknown (`module load pytorch` may or may not ship vLLM)** → The Slurm/venv docs include a verification step; missing packages are pip-installed into the scratch venv. Recheck when Roihu access is available.
 - **Trap-based cleanup could delete data needed for debugging a failed job** → Log the error to the job's Slurm output (persistent, no student content) before cleanup; opt-out env var keeps `$TMPDIR` for a debug session.
 - **argparse choice may need revisiting** when later changes add subcommands (e.g., `grade eval`) → argument parsing is isolated in one module to keep that migration trivial.
