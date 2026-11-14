@@ -1,0 +1,55 @@
+schema: spec-driven
+githubCopilot:
+  cloudAgent: true
+
+# Project context: constraints every proposal, design, and task list must respect.
+context: |
+  Siivilä analyzes student PDF submissions against versioned criteria and
+  produces evidence-based reports for teachers. It never assigns grades or
+  rubric points — the teacher makes the final assessment.
+
+  Core principle: the model proposes findings, deterministic software validates
+  them, the golden set measures their quality, and the teacher makes the
+  grading decision.
+
+  Fixed constraints:
+  - The same CLI, schemas, prompts, workflow, and reporting code run in both
+    environments: local macOS (Apple Silicon, small model) and production
+    Slurm jobs on CSC Roihu (NVIDIA GH200, aarch64+CUDA, ~64K context).
+  - Inference is direct vLLM offline API from Python — never an
+    OpenAI-compatible API server or SSH tunnel.
+  - LLMs make semantic judgments only; reference matching, citation numbering,
+    evidence validation, and report generation are deterministic code.
+  - Model output is constrained by Pydantic schemas; quotes are reconstructed
+    from source text, never trusted verbatim from the model.
+  - Student text is untrusted input: the model has no tools, no network, no
+    grading authority, and no access to other submissions.
+  - Student PDFs and extracted text are never committed to Git; on Roihu all
+    student data stays in job-local $TMPDIR and is deleted at job end. Only
+    validated, intentionally retained results are exported.
+  - Unit tests run without a model (fake inference backend). Keep tests
+    minimal — test behavior, not implementation.
+  - Follow the phased roadmap in README.md (## Roadmap): start small, one
+    change per phase, proposed just in time.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
