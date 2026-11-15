@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .backends import BackendError, create_backend
 from .config import CourseConfigError, load_course_config
+from .criteria import CriterionConfigError, load_criteria
 from .pipeline import run
 
 EXIT_USAGE_ERROR = 2
@@ -70,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE_ERROR
     try:
         config = load_course_config(args.course_config)
-    except CourseConfigError as exc:
+        criteria = load_criteria()
+    except (CourseConfigError, CriterionConfigError) as exc:
         print(f"grade: error: {exc}", file=sys.stderr)
         return EXIT_USAGE_ERROR
 
@@ -81,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE_ERROR
 
     try:
-        return run(args, config, backend)
+        return run(args, config, backend, criteria=criteria)
     except BackendError as exc:
         print(f"grade: error: {exc}", file=sys.stderr)
         return 1

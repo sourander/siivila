@@ -1,0 +1,12 @@
+id: synthesis
+version: "1.1"
+
+qualifies:
+  - Comparing, contrasting, or integrating two or more distinct methods, algorithms, or cited sources (e.g., [1] and [2]) to explain why they behave differently or when one applies over the other.
+  - Connecting a concept from one topic or source to a different topic or experiment to form a non-obvious analytical conclusion.
+
+does_not_qualify:
+  - Defining or explaining a single algorithm, metric, or concept across multiple sentences, even with an example or citation.
+  - Narrating exercise steps, code execution, parameter changes, or their direct output (e.g., changing a parameter and reporting that accuracy went up or down).
+  - Generic learning diary takeaways, self-reported understanding, or "pseudo-wisdom" (e.g., "I learned that preprocessing is important", "At first this was hard, then I understood", "Video X helped me understand Y").
+  - Listing lecture notes, code blocks, or multiple facts without comparing or integrating them.

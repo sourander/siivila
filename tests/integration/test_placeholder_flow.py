@@ -158,7 +158,7 @@ def test_synthesis_result_file_and_skipped_failed_extractions(workspace, monkeyp
     )
     assert res_a.submission_id == "student-a.pdf"
     assert res_a.criterion_id == "synthesis"
-    assert res_a.criterion_version == "1.0"
+    assert res_a.criterion_version == "1.1"
     assert res_a.status == "met"
     assert len(res_a.instances) == 1
     assert res_a.instances[0].quotes == ["Body line one.", "Body line two."]

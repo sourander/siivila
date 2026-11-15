@@ -76,7 +76,7 @@ filenames, per-file outcomes, and warnings only: never extracted text.
 
 Each criterion is evaluated separately. Initial criteria:
 
-- synthesis of separate facts or sources _(implemented: v1.0 in `src/siivila/criteria.py`)_
+- synthesis of separate facts or sources _(implemented: v1.1 in `criteria/synthesis.yaml`)_
 - conversation with sources
 - findings from required exercises (listed in course config)
 - in-depth treatment of weekly themes (listed in course config)

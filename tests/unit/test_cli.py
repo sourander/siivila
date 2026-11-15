@@ -75,3 +75,19 @@ def test_invalid_course_config_fails_before_backend(paths, monkeypatch, capsys):
     code = cli.main(_argv(model, input_dir, output_dir, config))
     assert code != 0
     assert "required_exercises" in capsys.readouterr().err
+
+
+def test_invalid_criteria_config_fails_before_backend(paths, monkeypatch, capsys):
+    model, input_dir, output_dir, config = paths
+    monkeypatch.setattr(
+        cli,
+        "load_criteria",
+        lambda: (_ for _ in ()).throw(cli.CriterionConfigError("bad criterion yaml")),
+    )
+    monkeypatch.setattr(
+        cli, "create_backend",
+        lambda *_args, **_kwargs: pytest.fail("backend must not be constructed"),
+    )
+    code = cli.main(_argv(model, input_dir, output_dir, config))
+    assert code != 0
+    assert "bad criterion yaml" in capsys.readouterr().err

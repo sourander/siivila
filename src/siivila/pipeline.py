@@ -9,10 +9,12 @@ from pydantic import BaseModel, Field
 from .backends import ModelBackend
 from .config import CourseConfig
 from .criteria import (
-    SYNTHESIS_CRITERION_ID,
+    CriterionConfig,
     TopicSynthesisOutput,
     build_submission_prompts,
     evaluate_submission,
+    is_criterion_applicable,
+    load_criteria,
 )
 from .extraction import EXTRACTION_VERSION, ExtractionOutcome, extract_submission
 from .observability import trace_span
@@ -46,7 +48,7 @@ class CriterionOutcome(BaseModel):
     """Per-submission criterion outcome. Filenames and safe reasons only."""
 
     filename: str
-    criterion_id: str = SYNTHESIS_CRITERION_ID
+    criterion_id: str = "synthesis"
     result_file: str | None = None
     failure_reason: str | None = None
 
@@ -72,7 +74,12 @@ def find_submissions(input_dir: Path) -> list[Path]:
     return sorted(input_dir.glob("*.pdf"))
 
 
-def run(args, config: CourseConfig, backend: ModelBackend) -> int:
+def run(
+    args,
+    config: CourseConfig,
+    backend: ModelBackend,
+    criteria: list[CriterionConfig] | None = None,
+) -> int:
     """Extract and evaluate all submissions and write the run manifest.
 
     Per-file extraction and criterion failures are recorded, not raised: a
@@ -80,6 +87,10 @@ def run(args, config: CourseConfig, backend: ModelBackend) -> int:
     fail. Run-level errors (config, backend health check) still exit nonzero
     from the CLI.
     """
+    loaded_criteria = criteria if criteria is not None else load_criteria()
+    active_criteria = [
+        c for c in loaded_criteria if is_criterion_applicable(c, config)
+    ]
     submissions = find_submissions(args.input_dir)
 
     extracted: list[tuple[Path, ExtractionOutcome]] = []
@@ -110,47 +121,57 @@ def run(args, config: CourseConfig, backend: ModelBackend) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     criterion_results: list[CriterionOutcome] = []
     for path, outcome in extracted:
-        if outcome.status != "success" or outcome.extraction is None:
-            criterion_results.append(
-                CriterionOutcome(
-                    filename=outcome.filename,
-                    failure_reason=outcome.failure_reason or outcome.failure_code,
+        for criterion in active_criteria:
+            if outcome.status != "success" or outcome.extraction is None:
+                criterion_results.append(
+                    CriterionOutcome(
+                        filename=outcome.filename,
+                        criterion_id=criterion.id,
+                        failure_reason=outcome.failure_reason or outcome.failure_code,
+                    )
                 )
+                continue
+            prompts = build_submission_prompts(
+                outcome.extraction, criterion, config
             )
-            continue
-        prompts = build_submission_prompts(outcome.extraction)
-        try:
-            with trace_span("criterion-synthesis"):
-                topic_outputs = (
-                    backend.generate(prompts, TopicSynthesisOutput) if prompts else []
+            try:
+                with trace_span(f"criterion-{criterion.id}"):
+                    topic_outputs = (
+                        backend.generate(prompts, TopicSynthesisOutput)
+                        if prompts
+                        else []
+                    )
+                result = evaluate_submission(
+                    outcome.extraction, topic_outputs, criterion
                 )
-            result = evaluate_submission(outcome.extraction, topic_outputs)
-            result_filename = f"{path.stem}.{SYNTHESIS_CRITERION_ID}.json"
-            (args.output_dir / result_filename).write_text(
-                result.model_dump_json(indent=2) + "\n", encoding="utf-8"
-            )
-            criterion_results.append(
-                CriterionOutcome(
-                    filename=outcome.filename,
-                    result_file=result_filename,
+                result_filename = f"{path.stem}.{criterion.id}.json"
+                (args.output_dir / result_filename).write_text(
+                    result.model_dump_json(indent=2) + "\n", encoding="utf-8"
                 )
-            )
-            print(
-                f"grade: {outcome.filename}: synthesis {result.status} -> "
-                f"{result_filename}"
-            )
-        except Exception:
-            # Never propagate raw exception details: they may embed student text.
-            criterion_results.append(
-                CriterionOutcome(
-                    filename=outcome.filename,
-                    failure_reason=CRITERION_FAILURE_REASON,
+                criterion_results.append(
+                    CriterionOutcome(
+                        filename=outcome.filename,
+                        criterion_id=criterion.id,
+                        result_file=result_filename,
+                    )
                 )
-            )
-            print(
-                f"grade: {outcome.filename}: synthesis failure "
-                f"({CRITERION_FAILURE_REASON})"
-            )
+                print(
+                    f"grade: {outcome.filename}: {criterion.id} {result.status} -> "
+                    f"{result_filename}"
+                )
+            except Exception:
+                # Never propagate raw exception details: they may embed student text.
+                criterion_results.append(
+                    CriterionOutcome(
+                        filename=outcome.filename,
+                        criterion_id=criterion.id,
+                        failure_reason=CRITERION_FAILURE_REASON,
+                    )
+                )
+                print(
+                    f"grade: {outcome.filename}: {criterion.id} failure "
+                    f"({CRITERION_FAILURE_REASON})"
+                )
 
     manifest = RunManifest(
         course_name=config.course_name,
