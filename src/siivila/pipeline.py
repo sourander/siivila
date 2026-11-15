@@ -1,10 +1,4 @@
-"""Analysis pipeline: extraction, health check, run manifest.
-
-Phase 2 of the roadmap: extracts every submission into traceable topics,
-paragraphs, and sentences (kept in memory), runs the model health check,
-and writes a metadata-only manifest with per-file extraction outcomes.
-Criterion evaluation arrives in later phases.
-"""
+"""Analysis pipeline: extraction, criterion evaluation, health check, manifest."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,13 +8,21 @@ from pydantic import BaseModel, Field
 
 from .backends import ModelBackend
 from .config import CourseConfig
-from .extraction import EXTRACTION_VERSION, extract_submission
+from .criteria import (
+    SYNTHESIS_CRITERION_ID,
+    TopicSynthesisOutput,
+    build_submission_prompts,
+    evaluate_submission,
+)
+from .extraction import EXTRACTION_VERSION, ExtractionOutcome, extract_submission
 from .observability import trace_span
 
 HEALTH_CHECK_PROMPT = (
     "You are the Siivilä analysis pipeline performing a health check. "
     "Confirm that you are operational."
 )
+
+CRITERION_FAILURE_REASON = "criterion evaluation failed"
 
 
 class HealthCheck(BaseModel):
@@ -40,6 +42,15 @@ class SubmissionOutcome(BaseModel):
     failure_reason: str | None = None
 
 
+class CriterionOutcome(BaseModel):
+    """Per-submission criterion outcome. Filenames and safe reasons only."""
+
+    filename: str
+    criterion_id: str = SYNTHESIS_CRITERION_ID
+    result_file: str | None = None
+    failure_reason: str | None = None
+
+
 class RunManifest(BaseModel):
     """What a run saw and did. Metadata and filenames only — no content."""
 
@@ -51,6 +62,7 @@ class RunManifest(BaseModel):
     submissions: list[str]
     extraction_version: str
     outcomes: list[SubmissionOutcome]
+    criterion_results: list[CriterionOutcome] = Field(default_factory=list)
     health_check: HealthCheck
     created_at: datetime
 
@@ -61,17 +73,20 @@ def find_submissions(input_dir: Path) -> list[Path]:
 
 
 def run(args, config: CourseConfig, backend: ModelBackend) -> int:
-    """Extract all submissions and write the run manifest.
+    """Extract and evaluate all submissions and write the run manifest.
 
-    Per-file extraction failures are recorded, not raised: a completed batch
-    exits successfully even when some (or all) submissions fail. Run-level
-    errors (config, backend) still exit nonzero from the CLI.
+    Per-file extraction and criterion failures are recorded, not raised: a
+    completed batch exits successfully even when some (or all) submissions
+    fail. Run-level errors (config, backend health check) still exit nonzero
+    from the CLI.
     """
     submissions = find_submissions(args.input_dir)
 
+    extracted: list[tuple[Path, ExtractionOutcome]] = []
     outcomes: list[SubmissionOutcome] = []
     for path in submissions:
         outcome = extract_submission(path)
+        extracted.append((path, outcome))
         outcomes.append(
             SubmissionOutcome(
                 filename=outcome.filename,
@@ -92,6 +107,43 @@ def run(args, config: CourseConfig, backend: ModelBackend) -> int:
     with trace_span("health-check"):
         health_check = backend.generate([HEALTH_CHECK_PROMPT], HealthCheck)[0]
 
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    criterion_results: list[CriterionOutcome] = []
+    for path, outcome in extracted:
+        if outcome.status != "success" or outcome.extraction is None:
+            criterion_results.append(
+                CriterionOutcome(
+                    filename=outcome.filename,
+                    failure_reason=outcome.failure_reason or outcome.failure_code,
+                )
+            )
+            continue
+        prompts = build_submission_prompts(outcome.extraction)
+        try:
+            with trace_span("criterion-synthesis"):
+                topic_outputs = (
+                    backend.generate(prompts, TopicSynthesisOutput) if prompts else []
+                )
+            result = evaluate_submission(outcome.extraction, topic_outputs)
+            result_filename = f"{path.stem}.{SYNTHESIS_CRITERION_ID}.json"
+            (args.output_dir / result_filename).write_text(
+                result.model_dump_json(indent=2) + "\n", encoding="utf-8"
+            )
+            criterion_results.append(
+                CriterionOutcome(
+                    filename=outcome.filename,
+                    result_file=result_filename,
+                )
+            )
+        except Exception:
+            # Never propagate raw exception details: they may embed student text.
+            criterion_results.append(
+                CriterionOutcome(
+                    filename=outcome.filename,
+                    failure_reason=CRITERION_FAILURE_REASON,
+                )
+            )
+
     manifest = RunManifest(
         course_name=config.course_name,
         model_path=str(args.model_path),
@@ -101,10 +153,10 @@ def run(args, config: CourseConfig, backend: ModelBackend) -> int:
         submissions=[path.name for path in submissions],
         extraction_version=EXTRACTION_VERSION,
         outcomes=outcomes,
+        criterion_results=criterion_results,
         health_check=health_check,
         created_at=datetime.now(UTC),
     )
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = args.output_dir / "manifest.json"
     manifest_path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
 

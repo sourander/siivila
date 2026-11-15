@@ -24,6 +24,8 @@ delivers schema-validated Pydantic models with bounded retries and raises
 - No cross-topic synthesis calls, no golden set, no report rendering —
   later roadmap steps.
 - No criterion registry/config: one criterion, defined in code.
+- No separate smoke-test script or untracked helper code: `uv run grade`
+  with `--input-dir` and `--output-dir` is the smoke test across machines.
 
 ## Decisions
 
@@ -82,4 +84,6 @@ Additive change; no migration.
 - [Model invents sentence ids] → Rejected by the id lookup; counted as
   warnings so prompt quality is measurable later.
 - [Small local model produces poor findings] → Smoke tests verify plumbing
-  only; quality is measured on Roihu with the golden set, as documented.
+  only (`uv run grade` from an unversioned `--input-dir` of PDFs to
+  `--output-dir`); quality is measured on Roihu with the golden set, as
+  documented.

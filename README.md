@@ -76,7 +76,7 @@ filenames, per-file outcomes, and warnings only: never extracted text.
 
 Each criterion is evaluated separately. Initial criteria:
 
-- synthesis of separate facts or sources
+- synthesis of separate facts or sources _(implemented: v1.0 in `src/siivila/criteria.py`)_
 - conversation with sources
 - findings from required exercises (listed in course config)
 - in-depth treatment of weekly themes (listed in course config)
@@ -87,7 +87,8 @@ Each criterion has a versioned definition containing what qualifies, what does
 not qualify, required course metadata, allowed output labels, uncertainty rules,
 and the expected Pydantic schema.
 
-Each criterion produces an independent result, shaped roughly like:
+Each criterion produces an independent result file (`<stem>.<criterion>.json`
+in `--output-dir`), shaped like:
 
 ```json
 {
@@ -97,9 +98,14 @@ Each criterion produces an independent result, shaped roughly like:
   "status": "met",
   "instances": [
     {
-      "sentence_ids": ["topic-3-s42", "topic-3-s43"],
+      "sentence_ids": ["sent-42", "sent-43"],
+      "quotes": [
+        "First exact sentence span from the submission.",
+        "Second exact sentence span from the submission."
+      ],
       "classification": "synthesis",
-      "rationale": "Connects two sources to form a broader conclusion."
+      "rationale": "Connects two sources to form a broader conclusion.",
+      "uncertain": false
     }
   ],
   "warnings": []
@@ -169,10 +175,11 @@ sbatch --gres=gpu:4 slurm/grade.slurm    # more GPUs for parallel evaluation
 
 - **Unit tests** (`uv run pytest tests/unit`) run without a model using
   synthetic PDF and sentence fixtures. Keep tests minimal — less is better.
-- **Local smoke tests** use a small model on the Mac to verify system operation
-  (model loading, batching, structured output, LangGraph routing, validation
-  and retry, end-to-end report creation) — not grading quality. Use the local
-  `testdata/local/referenssipaivakirja.pdf` for these tests; never commit it.
+- **Local smoke tests** run `uv run grade` with a small local model to verify
+  system operation (model loading, batching, structured output, validation and
+  retry, end-to-end JSON output) — not grading quality. Pass any unversioned
+  PDF directory via `--input-dir` (e.g. under `testdata/local/`) and an output
+  directory via `--output-dir`; all code and helpers stay in Git.
 - **Golden-set evaluation** runs production candidates on Roihu with Inspect AI,
   measuring: schema-valid output rate; criterion precision/recall/F1; evidence
   precision/recall; span or sentence overlap; invalid evidence rate; near-miss
@@ -195,8 +202,9 @@ text, ignores model-produced grades, flags suspicious instructions (e.g.
 ## Data protection
 
 Student PDFs and extracted text are never committed to Git. For local
-development, keep student PDFs, review annotations, and extracted outputs
-under `testdata/local/`, which is Git-ignored. The ignore rule is a safeguard,
+development and smoke tests, keep unversioned input PDFs and output directories
+under `testdata/local/`, which is Git-ignored; all code lives in the repository.
+The ignore rule is a safeguard,
 not a guarantee: it does not protect against `git add -f`, and files stored
 anywhere else are not covered — always check `git status` before committing.
 On Roihu, all
@@ -223,6 +231,7 @@ a time; later phases are detailed only when reached.
 2. PDF extraction and stable topic, paragraph, and sentence identifiers  
    _done: `openspec/changes/archive/2026-11-15-add-pdf-extraction`_
 3. The synthesis criterion end to end
+   _done: `openspec/changes/archive/2026-11-15-add-synthesis-criterion`_
 4. Pydantic validation and deterministic evidence reconstruction
 5. Initial golden-set annotations and Inspect AI evaluation
 6. Coverage and source-engagement criteria
