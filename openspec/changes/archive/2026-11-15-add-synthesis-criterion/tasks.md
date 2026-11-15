@@ -17,7 +17,7 @@
 ## 3. Verification
 
 - [x] 3.1 Run `uv run pytest` and verify the full suite passes.
-- [ ] 3.2 Run a smoke test with `uv run grade` pointing `--input-dir` at a gitignored PDF directory and `--output-dir` at an output directory, and verify `manifest.json` and `<stem>.synthesis.json` (with resolvable quotes) are written to `--output-dir`.
+- [x] 3.2 Run a smoke test with `uv run grade` pointing `--input-dir` at a gitignored PDF directory and `--output-dir` at an output directory, and verify `manifest.json` and `<stem>.synthesis.json` (with resolvable quotes) are written to `--output-dir`.
 
 ## Workflow follow-up
 
