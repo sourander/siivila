@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from siivila.segmentation import segment, sentence_spans
+from siivila.segmentation import sentence_spans
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "english_sentences.json"
 
@@ -12,7 +12,8 @@ def test_english_boundary_fixtures():
     cases = json.loads(FIXTURE.read_text(encoding="utf-8"))
     assert len(cases) >= 25  # the reviewed synthetic regression set
     for case in cases:
-        assert segment(case["text"]) == case["sentences"], case["text"]
+        text = case["text"]
+        assert [text[start:end] for start, end in sentence_spans(text)] == case["sentences"], text
 
 
 def test_spans_tile_text_without_separator_whitespace():

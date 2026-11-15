@@ -6,7 +6,7 @@ Helvetica font at explicit positions, outlines carry /XYZ destinations like
 Typst's, and XMP declaration snippets mimic (or omit) pdfaid/pdfuaid.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from pypdf import PdfWriter
@@ -20,11 +20,8 @@ from pypdf.generic import (
 PAGE_WIDTH = 595.0
 PAGE_HEIGHT = 842.0
 MARGIN_X = 72.0
-TOP_Y = 770.0
 BODY_SIZE = 10.0
 HEADING_SIZE = 11.0
-LINE_GAP = 15.0
-PARAGRAPH_GAP = 24.0
 
 _XMP = """<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
@@ -69,7 +66,6 @@ class OutlineEntry:
     title: str
     page: int
     y: float
-    children: list["OutlineEntry"] = field(default_factory=list)
 
 
 def _escape(text: str) -> str:
@@ -122,17 +118,12 @@ def build_pdf(
         page[NameObject("/Contents")] = writer._add_object(_content_stream(lines))
         page_refs.append(page)
 
-    def add_entries(entries: list[OutlineEntry], parent=None) -> None:
-        for entry in entries:
-            item = writer.add_outline_item(
-                title=entry.title,
-                page_number=page_refs[entry.page],
-                parent=parent,
-                fit=Fit.xyz(left=MARGIN_X, top=entry.y, zoom=None),
-            )
-            add_entries(entry.children, parent=item)
-
-    add_entries(outline or [])
+    for entry in outline or []:
+        writer.add_outline_item(
+            title=entry.title,
+            page_number=page_refs[entry.page],
+            fit=Fit.xyz(left=MARGIN_X, top=entry.y, zoom=None),
+        )
 
     if xmp is not None:
         stream = DecodedStreamObject()

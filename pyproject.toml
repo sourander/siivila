@@ -15,7 +15,6 @@ dependencies = [
 
 [project.scripts]
 grade = "siivila.cli:main"
-siivila = "siivila:main"
 
 [project.optional-dependencies]
 observability = [

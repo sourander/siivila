@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from siivila.config import CourseConfig, CourseConfigError, load_course_config
+from siivila.config import CourseConfigError, load_course_config
 
 VALID = {
     "course_name": "Example Course",
@@ -70,11 +70,6 @@ def test_non_mapping_yaml_fails(tmp_path):
     path.write_text("- just\n- a\n- list\n", encoding="utf-8")
     with pytest.raises(CourseConfigError, match="failed validation"):
         load_course_config(path)
-
-
-def test_model_validate_directly():
-    config = CourseConfig.model_validate(VALID)
-    assert config.required_exercises == ["Exercise 1", "Exercise 2"]
 
 
 def test_example_course_a_loads():

@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .backends import BackendError, ModelBackend, create_backend
+from .backends import BackendError, create_backend
 from .config import CourseConfigError, load_course_config
 from .pipeline import run
 
@@ -55,11 +55,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def default_backend(args: argparse.Namespace) -> ModelBackend:
-    """Construct the selected backend. Kept separate so tests can inject a fake."""
-    return create_backend(args.backend, model_path=args.model_path)
-
-
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -80,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE_ERROR
 
     try:
-        backend = default_backend(args)
+        backend = create_backend(args.backend, model_path=args.model_path)
     except BackendError as exc:
         print(f"grade: error: {exc}", file=sys.stderr)
         return EXIT_USAGE_ERROR

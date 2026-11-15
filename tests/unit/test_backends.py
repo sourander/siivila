@@ -109,9 +109,6 @@ class TestVllmBackend:
 
     def test_loads_model_with_production_context(self, model_dir, monkeypatch):
         llm = _FakeLLM()
-        monkeypatch.setattr(
-            sys, "modules", sys.modules
-        )  # no-op; keep symmetry with other tests
         fake_vllm_holder = {}
 
         def capture_llm(**kwargs):
@@ -140,7 +137,7 @@ class TestVllmBackend:
     def test_invalid_output_retries_then_raises(self, model_dir, monkeypatch):
         llm = _install_fake_vllm(monkeypatch, _FakeLLM())
         llm.responses = ["not json", "still not json", '{"wrong": "shape"}']
-        backend = VllmBackend(model_dir, max_retries=2)
+        backend = VllmBackend(model_dir)
         with pytest.raises(BackendError, match="schema-invalid output"):
             backend.generate(["health?"], HealthCheck)
         assert len(llm.prompts_seen) == 3  # initial + 2 retries
@@ -220,7 +217,7 @@ class TestMlxBackend:
             return "not json at all"
 
         _install_fake_mlx(monkeypatch, generate)
-        backend = MlxBackend("m", max_retries=2)
+        backend = MlxBackend("m")
         with pytest.raises(BackendError, match="schema-invalid output"):
             backend.generate(["health?"], HealthCheck)
         assert len(prompts) == 3  # initial + 2 retries

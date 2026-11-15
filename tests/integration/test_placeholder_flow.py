@@ -7,7 +7,7 @@ import yaml
 
 import siivila.cli as cli
 from siivila.backends import BackendError, FakeBackend
-from siivila.pipeline import HealthCheck, load_manifest
+from siivila.pipeline import HEALTH_CHECK_PROMPT, HealthCheck, RunManifest
 from tests.synthetic_pdf import (
     XMP_BOTH,
     DrawnLine,
@@ -20,6 +20,10 @@ CONFIG = {
     "required_exercises": ["Exercise 1"],
     "weekly_themes": ["Theme A"],
 }
+
+
+def load_manifest(path: Path) -> RunManifest:
+    return RunManifest.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def _synthetic_submission(path: Path, topic: str) -> None:
@@ -56,7 +60,7 @@ def test_end_to_end_manifest(workspace, monkeypatch):
     fake = FakeBackend(
         responder=lambda _p, schema: schema(operational=True, message="ready")
     )
-    monkeypatch.setattr(cli, "default_backend", lambda _args: fake)
+    monkeypatch.setattr(cli, "create_backend", lambda *_args, **_kwargs: fake)
 
     code = cli.main([
         "--model-path", str(model),
@@ -72,7 +76,7 @@ def test_end_to_end_manifest(workspace, monkeypatch):
     assert manifest.health_check == HealthCheck(operational=True, message="ready")
     assert manifest.created_at.tzinfo is not None
     # exactly one schema-constrained health-check call happened
-    assert fake.calls == [(cli.run.__globals__["HEALTH_CHECK_PROMPT"], HealthCheck)]
+    assert fake.calls == [(HEALTH_CHECK_PROMPT, HealthCheck)]
 
 
 def test_empty_input_dir_still_writes_manifest(workspace, monkeypatch, tmp_path):
@@ -82,7 +86,7 @@ def test_empty_input_dir_still_writes_manifest(workspace, monkeypatch, tmp_path)
     fake = FakeBackend(
         responder=lambda _p, schema: schema(operational=True, message="ready")
     )
-    monkeypatch.setattr(cli, "default_backend", lambda _args: fake)
+    monkeypatch.setattr(cli, "create_backend", lambda *_args, **_kwargs: fake)
 
     code = cli.main([
         "--model-path", str(model),
@@ -102,7 +106,7 @@ def _run_cli(workspace, monkeypatch, input_dir):
     fake = FakeBackend(
         responder=lambda _p, schema: schema(operational=True, message="ready")
     )
-    monkeypatch.setattr(cli, "default_backend", lambda _args: fake)
+    monkeypatch.setattr(cli, "create_backend", lambda *_args, **_kwargs: fake)
     code = cli.main([
         "--model-path", str(model),
         "--input-dir", str(input_dir),
@@ -180,7 +184,7 @@ def test_run_level_error_exits_nonzero(workspace, monkeypatch, tmp_path):
     def failing(_prompt, _schema):
         raise BackendError("model exploded")
 
-    monkeypatch.setattr(cli, "default_backend", lambda _args: FakeBackend(failing))
+    monkeypatch.setattr(cli, "create_backend", lambda *_args, **_kwargs: FakeBackend(failing))
     code = cli.main([
         "--model-path", str(model),
         "--input-dir", str(input_dir),

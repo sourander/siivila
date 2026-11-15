@@ -47,8 +47,8 @@ def test_missing_required_argument_exits_nonzero_and_names_it(paths, capsys):
 def test_nonexistent_input_dir_fails_before_backend(paths, monkeypatch, capsys):
     model, _input_dir, output_dir, config = paths
     monkeypatch.setattr(
-        cli, "default_backend",
-        lambda _args: pytest.fail("backend must not be constructed"),
+        cli, "create_backend",
+        lambda *_args, **_kwargs: pytest.fail("backend must not be constructed"),
     )
     code = cli.main(_argv(model, paths[1] / "missing", output_dir, config))
     assert code != 0
@@ -69,8 +69,8 @@ def test_invalid_course_config_fails_before_backend(paths, monkeypatch, capsys):
     model, input_dir, output_dir, config = paths
     config.write_text(yaml.safe_dump({"course_name": "missing the rest"}), encoding="utf-8")
     monkeypatch.setattr(
-        cli, "default_backend",
-        lambda _args: pytest.fail("backend must not be constructed"),
+        cli, "create_backend",
+        lambda *_args, **_kwargs: pytest.fail("backend must not be constructed"),
     )
     code = cli.main(_argv(model, input_dir, output_dir, config))
     assert code != 0

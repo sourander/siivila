@@ -124,8 +124,3 @@ def sentence_spans(text: str) -> list[tuple[int, int]]:
     if start < end:
         spans.append((start, end))
     return spans
-
-
-def segment(text: str) -> list[str]:
-    """Sentence texts of `text`, in order."""
-    return [text[start:end] for start, end in sentence_spans(text)]

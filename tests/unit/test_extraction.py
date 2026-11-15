@@ -15,7 +15,6 @@ from siivila.extraction import (
     extract_submission,
 )
 from tests.synthetic_pdf import (
-    BODY_SIZE,
     HEADING_SIZE,
     XMP_BOTH,
     XMP_NEITHER,
@@ -30,10 +29,6 @@ from tests.synthetic_pdf import (
 # (mirrors the reference documents' ~15pt line and ~23.5pt paragraph gaps).
 G = 15.0
 P = 24.0
-
-
-def paginated(lines_spec: list[tuple[str, float]]) -> list[DrawnLine]:
-    return [DrawnLine(text=text, y=y, size=size) for text, y, size in lines_spec]
 
 
 @pytest.fixture
@@ -239,8 +234,7 @@ def test_failure_keeps_warnings_without_content(tmp_path: Path):
     outcome = extract_submission(path)
     assert outcome.status == "failure"
     assert outcome.warnings == [WARNING_NO_PDFA, WARNING_NO_PDFUA]
-    # Metadata view carries no extracted content even when present.
-    assert outcome.metadata().extraction is None
+    assert outcome.extraction is None
 
 
 def _prose_pdf(tmp_path: Path, name: str, lines: list[str]) -> Path:

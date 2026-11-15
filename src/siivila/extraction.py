@@ -119,11 +119,6 @@ class ExtractionOutcome(BaseModel):
     failure_reason: str | None = None
     extraction: SubmissionExtraction | None = None
 
-    def metadata(self) -> "ExtractionOutcome":
-        """Copy without extracted content, safe for exported metadata."""
-        return self.model_copy(update={"extraction": None})
-
-
 @dataclass
 class _Line:
     """A reconstructed text line: page (0-based), baseline y, x, text."""

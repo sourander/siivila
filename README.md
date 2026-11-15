@@ -167,12 +167,12 @@ sbatch --gres=gpu:4 slurm/grade.slurm    # more GPUs for parallel evaluation
 
 ## Evaluation and testing
 
-- **Unit tests** (`uv run pytest tests/unit`) run without a model: PDF
-  extraction, sectioning, sentence IDs, schemas, citation parsing, quote
-  reconstruction, report generation. Keep tests minimal — less is better.
+- **Unit tests** (`uv run pytest tests/unit`) run without a model using
+  synthetic PDF and sentence fixtures. Keep tests minimal — less is better.
 - **Local smoke tests** use a small model on the Mac to verify system operation
   (model loading, batching, structured output, LangGraph routing, validation
-  and retry, end-to-end report creation) — not grading quality.
+  and retry, end-to-end report creation) — not grading quality. Use the local
+  `testdata/local/referenssipaivakirja.pdf` for these tests; never commit it.
 - **Golden-set evaluation** runs production candidates on Roihu with Inspect AI,
   measuring: schema-valid output rate; criterion precision/recall/F1; evidence
   precision/recall; span or sentence overlap; invalid evidence rate; near-miss

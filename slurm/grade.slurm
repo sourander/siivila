@@ -22,7 +22,6 @@
 #   SIIVILA_VENV            scratch venv (default: /scratch/project_1234/venv-siivila)
 #   SIIVILA_SUBMISSIONS_SRC directory containing the PDFs to analyze (required)
 #   SIIVILA_RESULTS_DIR     export target for validated results (required)
-#   SIIVILA_KEEP_TMPDIR     set to 1 to skip cleanup when debugging a failure
 #
 # Data protection: PDFs, extracted text, caches, logs, and raw model outputs
 # exist only under $TMPDIR and are deleted when the job ends (trap on EXIT,
@@ -49,15 +48,11 @@ SUBMISSIONS_SRC="${SIIVILA_SUBMISSIONS_SRC:?set SIIVILA_SUBMISSIONS_SRC to the d
 RESULTS_DIR="${SIIVILA_RESULTS_DIR:?set SIIVILA_RESULTS_DIR to the results export directory}"
 
 JOB_ID="${SLURM_JOB_ID:-local}"
-WORK="${TMPDIR:-/tmp}/siivila-${JOB_ID}"
+WORK="${TMPDIR:?TMPDIR must be set to job-local storage}/siivila-${JOB_ID}"
 
 cleanup() {
-  if [[ "${SIIVILA_KEEP_TMPDIR:-0}" == "1" ]]; then
-    echo "siivila: SIIVILA_KEEP_TMPDIR=1, keeping job data at $WORK"
-  else
-    rm -rf "$WORK"
-    echo "siivila: deleted job-local data at $WORK"
-  fi
+  rm -rf "$WORK"
+  echo "siivila: deleted job-local data at $WORK"
 }
 trap cleanup EXIT
 
@@ -70,9 +65,6 @@ echo "siivila: staging submissions into job-local storage"
 cp "$SUBMISSIONS_SRC"/*.pdf "$WORK/submissions/"
 
 cd "$WORK/repo"
-
-# No persistent checkpoints: keep LangGraph state in memory only.
-export SIIVILA_DISABLE_CHECKPOINTS=1
 
 srun "$VENV/bin/python" grade.py \
   --backend vllm \

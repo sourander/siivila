@@ -6,7 +6,6 @@ and writes a metadata-only manifest with per-file extraction outcomes.
 Criterion evaluation arrives in later phases.
 """
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
@@ -117,8 +116,3 @@ def run(args, config: CourseConfig, backend: ModelBackend) -> int:
         f"manifest written to {manifest_path}"
     )
     return 0
-
-
-
-def load_manifest(path: Path) -> RunManifest:
-    return RunManifest.model_validate(json.loads(path.read_text(encoding="utf-8")))

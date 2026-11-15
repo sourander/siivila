@@ -82,14 +82,7 @@ class MlxBackend:
     Pydantic validation + bounded retry.
     """
 
-    def __init__(
-        self,
-        model_path: str,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-    ) -> None:
-        self.max_retries = max_retries
-        self.max_tokens = max_tokens
+    def __init__(self, model_path: str) -> None:
         try:
             from mlx_lm import load
         except ImportError as exc:
@@ -116,7 +109,7 @@ class MlxBackend:
             self._model,
             self._tokenizer,
             prompt=self._chat(prompt),
-            max_tokens=self.max_tokens,
+            max_tokens=DEFAULT_MAX_TOKENS,
             verbose=False,
         )
 
@@ -133,11 +126,11 @@ class MlxBackend:
     def _validated(
         self, mlx_generate: Callable[..., str], prompt: str, text: str, schema: type[T]
     ) -> T:
-        for attempt in range(self.max_retries + 1):
+        for attempt in range(DEFAULT_MAX_RETRIES + 1):
             try:
                 return schema.model_validate_json(_extract_json(text))
             except ValidationError:
-                if attempt >= self.max_retries:
+                if attempt >= DEFAULT_MAX_RETRIES:
                     raise BackendError(
                         f"model produced schema-invalid output {attempt + 1} times "
                         f"for schema {schema.__name__}"
@@ -149,17 +142,9 @@ class MlxBackend:
 class VllmBackend:
     """Direct vLLM offline inference. No API server, no network listener."""
 
-    def __init__(
-        self,
-        model_path: Path,
-        max_model_len: int = PRODUCTION_CONTEXT_LENGTH,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        **llm_kwargs: object,
-    ) -> None:
+    def __init__(self, model_path: Path) -> None:
         if not model_path.is_dir():
             raise BackendError(f"model path does not exist or is not a directory: {model_path}")
-        self.model_path = model_path
-        self.max_retries = max_retries
         try:
             from vllm import LLM
         except ImportError as exc:
@@ -167,7 +152,7 @@ class VllmBackend:
                 "vllm is not installed; install it in the active environment "
                 "(on Roihu: the scratch venv, see slurm/grade.slurm header)"
             ) from exc
-        self._llm = LLM(model=str(model_path), max_model_len=max_model_len, **llm_kwargs)
+        self._llm = LLM(model=str(model_path), max_model_len=PRODUCTION_CONTEXT_LENGTH)
 
     def generate(self, prompts: list[str], schema: type[T]) -> list[T]:
         from vllm import SamplingParams
@@ -184,11 +169,11 @@ class VllmBackend:
         return results
 
     def _validated(self, prompt: str, text: str, schema: type[T], params: object) -> T:
-        for attempt in range(self.max_retries + 1):
+        for attempt in range(DEFAULT_MAX_RETRIES + 1):
             try:
                 return schema.model_validate_json(text)
             except ValidationError:
-                if attempt >= self.max_retries:
+                if attempt >= DEFAULT_MAX_RETRIES:
                     raise BackendError(
                         f"model produced schema-invalid output {attempt + 1} times "
                         f"for schema {schema.__name__}"

@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from siivila!")
+"""Siivilä evidence analysis."""
