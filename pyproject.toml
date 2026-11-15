@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.14.3",
+    "pypdf>=7.1.0",
     "pyyaml>=6.0.3",
 ]
 
@@ -30,3 +31,6 @@ dev = [
     "mlx-lm>=0.32.2",
     "pytest>=9.2.0",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

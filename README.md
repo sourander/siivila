@@ -1,6 +1,6 @@
 # Siivilä
 
-Siivilä (Finnish for *sieve*) analyzes student PDF submissions against predefined,
+Siivilä (Finnish for _sieve_) analyzes student PDF submissions against predefined,
 versioned criteria and produces an evidence-based report for the teacher.
 
 For each criterion the system identifies and counts evidence, locates and quotes
@@ -60,7 +60,17 @@ processed mainly by topic:
   reference consistency
 
 Sections are defined by Typst-generated PDF headings, not arbitrary token
-chunks. Input files should be PDF/A UA-1 compliant.
+chunks. Input files should be PDF/A UA-1 compliant; submissions missing
+those declarations are still processed, with a warning in the run manifest.
+
+Extraction (pypdf) reads each submission into heading-aligned topics,
+ordered paragraphs, and sentences with exact offsets into the canonical
+extracted text, source page references, and deterministic versioned
+identifiers (`topic-N`, `par-N`, `sent-N`, scoped to the submission
+filename). A submission that cannot be parsed or mapped to heading
+structure is recorded in the manifest with a safe failure reason — the
+batch continues and still exits successfully. The manifest contains
+filenames, per-file outcomes, and warnings only: never extracted text.
 
 ## Criterion design
 
@@ -141,7 +151,7 @@ One-time environment setup on Roihu (no uv — pip into the scratch venv):
 module load pytorch
 python -m venv --system-site-packages /scratch/project_1234/venv-siivila
 export PIP_CACHE_DIR=/scratch/project_1234/pip-cache   # keep $HOME clean
-/scratch/project_1234/venv-siivila/bin/pip install pydantic pyyaml
+/scratch/project_1234/venv-siivila/bin/pip install pydantic pyyaml pypdf
 # Check what the pytorch module already provides, install only the rest:
 /scratch/project_1234/venv-siivila/bin/python -c "import torch, vllm" \
   || /scratch/project_1234/venv-siivila/bin/pip install vllm
@@ -184,7 +194,12 @@ text, ignores model-produced grades, flags suspicious instructions (e.g.
 
 ## Data protection
 
-Student PDFs and extracted text are never committed to Git. On Roihu, all
+Student PDFs and extracted text are never committed to Git. For local
+development, keep student PDFs, review annotations, and extracted outputs
+under `testdata/local/`, which is Git-ignored. The ignore rule is a safeguard,
+not a guarantee: it does not protect against `git add -f`, and files stored
+anywhere else are not covered — always check `git status` before committing.
+On Roihu, all
 PDFs, extracted text, caches, logs, and raw outputs stay in job-local `$TMPDIR`
 and are deleted when the job ends; only validated, intentionally retained
 results and reports — metadata and filenames, not student content — are
@@ -203,9 +218,10 @@ Development proceeds in small phases, each proposed, implemented, and archived
 as its own OpenSpec change (see [CONTRIBUTE.md](CONTRIBUTE.md)). One phase at
 a time; later phases are detailed only when reached.
 
-1. uv project, CLI, direct vLLM backend, and Slurm script —
-   *in progress: `openspec/changes/add-cli-vllm-scaffold`*
-2. PDF extraction and stable topic, paragraph, and sentence identifiers
+1. uv project, CLI, direct vLLM backend, and Slurm script
+   _done: `openspec/changes/archive/2026-11-14-add-cli-vllm-scaffold`_
+2. PDF extraction and stable topic, paragraph, and sentence identifiers  
+   _done: `openspec/changes/archive/2026-11-15-add-pdf-extraction`_
 3. The synthesis criterion end to end
 4. Pydantic validation and deterministic evidence reconstruction
 5. Initial golden-set annotations and Inspect AI evaluation

@@ -1,0 +1,114 @@
+[
+  {
+    "text": "The model converged quickly. We saved the checkpoint.",
+    "sentences": ["The model converged quickly.", "We saved the checkpoint."]
+  },
+  {
+    "text": "We used e.g. dropout, weight decay, and early stopping. The model converged.",
+    "sentences": ["We used e.g. dropout, weight decay, and early stopping.", "The model converged."]
+  },
+  {
+    "text": "The task is classification, i.e. assigning labels. It worked well.",
+    "sentences": ["The task is classification, i.e. assigning labels.", "It worked well."]
+  },
+  {
+    "text": "We logged metrics, artifacts, etc. during training. Nothing was lost.",
+    "sentences": ["We logged metrics, artifacts, etc. during training.", "Nothing was lost."]
+  },
+  {
+    "text": "The learning rate was 0.001 and the accuracy reached 0.95. Training stopped early.",
+    "sentences": ["The learning rate was 0.001 and the accuracy reached 0.95.", "Training stopped early."]
+  },
+  {
+    "text": "Transformers dominate NLP [1]. They rely on attention.",
+    "sentences": ["Transformers dominate NLP [1].", "They rely on attention."]
+  },
+  {
+    "text": "As shown by Smith et al. [2], the method scales. We confirmed it.",
+    "sentences": ["As shown by Smith et al. [2], the method scales.", "We confirmed it."]
+  },
+  {
+    "text": "The authors wrote \"the results were inconclusive.\" We disagreed politely.",
+    "sentences": ["The authors wrote \"the results were inconclusive.\"", "We disagreed politely."]
+  },
+  {
+    "text": "Does it generalize? Probably! It worked on the test set.",
+    "sentences": ["Does it generalize?", "Probably!", "It worked on the test set."]
+  },
+  {
+    "text": "J. R. R. Tolkien wrote long books. They remain popular.",
+    "sentences": ["J. R. R. Tolkien wrote long books.", "They remain popular."]
+  },
+  {
+    "text": "Dr. Smith presented the slides. The room was full.",
+    "sentences": ["Dr. Smith presented the slides.", "The room was full."]
+  },
+  {
+    "text": "The list goes on... but we stopped early. Next topic.",
+    "sentences": ["The list goes on... but we stopped early.", "Next topic."]
+  },
+  {
+    "text": "Fig. 3 shows the loss curve. It drops fast.",
+    "sentences": ["Fig. 3 shows the loss curve.", "It drops fast."]
+  },
+  {
+    "text": "See pp. 12–15 for background. Then continue.",
+    "sentences": ["See pp. 12–15 for background.", "Then continue."]
+  },
+  {
+    "text": "Training took 3.5 hours on one GPU. Inference is cheap.",
+    "sentences": ["Training took 3.5 hours on one GPU.", "Inference is cheap."]
+  },
+  {
+    "text": "She asked \"is this correct?\" and waited. Nobody answered.",
+    "sentences": ["She asked \"is this correct?\" and waited.", "Nobody answered."]
+  },
+  {
+    "text": "The accuracy was 95%. We celebrated.",
+    "sentences": ["The accuracy was 95%.", "We celebrated."]
+  },
+  {
+    "text": "It failed at 10.30 in the morning. We restarted it.",
+    "sentences": ["It failed at 10.30 in the morning.", "We restarted it."]
+  },
+  {
+    "text": "We compared against U.S. benchmarks. Ours was faster.",
+    "sentences": ["We compared against U.S. benchmarks.", "Ours was faster."]
+  },
+  {
+    "text": "The dataset had 10 000 rows. Cleaning took a week.",
+    "sentences": ["The dataset had 10 000 rows.", "Cleaning took a week."]
+  },
+  {
+    "text": "He shouted \"stop!\" and the run halted. We laughed.",
+    "sentences": ["He shouted \"stop!\" and the run halted.", "We laughed."]
+  },
+  {
+    "text": "Accuracy improved by 2.5 points, cf. the baseline. See Table 2.",
+    "sentences": ["Accuracy improved by 2.5 points, cf. the baseline.", "See Table 2."]
+  },
+  {
+    "text": "The notebook 03_training.py runs the pipeline. It takes an hour.",
+    "sentences": ["The notebook 03_training.py runs the pipeline.", "It takes an hour."]
+  },
+  {
+    "text": "We used version 3.14 of Python. It was released recently.",
+    "sentences": ["We used version 3.14 of Python.", "It was released recently."]
+  },
+  {
+    "text": "First we trained. Then we evaluated. Finally we deployed.",
+    "sentences": ["First we trained.", "Then we evaluated.", "Finally we deployed."]
+  },
+  {
+    "text": "Mr. and Mrs. Smith arrived. They brought data. It was clean.",
+    "sentences": ["Mr. and Mrs. Smith arrived.", "They brought data.", "It was clean."]
+  },
+  {
+    "text": "The scores were 0.9, 0.8, and 0.95 respectively. The mean was high. We reported it.",
+    "sentences": ["The scores were 0.9, 0.8, and 0.95 respectively.", "The mean was high.", "We reported it."]
+  },
+  {
+    "text": "Chapter 3 covers theory. Section 3.1 covers practice. Both matter.",
+    "sentences": ["Chapter 3 covers theory.", "Section 3.1 covers practice.", "Both matter."]
+  }
+]

@@ -6,7 +6,7 @@
 #   module load pytorch
 #   python -m venv --system-site-packages /scratch/project_1234/venv-siivila
 #   export PIP_CACHE_DIR=/scratch/project_1234/pip-cache   # keep $HOME clean
-#   /scratch/project_1234/venv-siivila/bin/pip install pydantic pyyaml
+#   /scratch/project_1234/venv-siivila/bin/pip install pydantic pyyaml pypdf
 #   # Check what the pytorch module already provides, install only the rest:
 #   /scratch/project_1234/venv-siivila/bin/python -c "import torch, vllm" \
 #     || /scratch/project_1234/venv-siivila/bin/pip install vllm
