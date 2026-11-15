@@ -71,7 +71,10 @@ def build_topic_prompt(topic: Topic) -> str:
         "Identify every passage in the topic below that demonstrates synthesis. "
         "Reference only the provided sentence identifiers (sent-N). "
         "Set uncertain=true when a passage is borderline and needs teacher review. "
-        "Do not assign grades or points.\n\n"
+        "Do not assign grades or points.\n"
+        'Return JSON matching: {"findings": [{"sentence_ids": ["sent-1", "sent-2"], '
+        '"classification": "synthesis", "rationale": "...", "uncertain": false}]} '
+        '(or {"findings": []} if none).\n\n'
         f"Topic: {topic.title}\n"
         f"Sentences:\n{body}"
     )

@@ -197,7 +197,10 @@ class TestMlxBackend:
         assert "json" in seen[0].lower()  # schema instruction appended
 
     def test_prose_wrapped_json_is_extracted(self, monkeypatch):
-        generate = lambda *_a, **_k: 'Sure! {"operational": false, "message": "x"} done'
+        generate = lambda *_a, **_k: (
+            '<think>schema has {"findings": []}</think>\n'
+            'Sure! {"operational": false, "message": "x"} done'
+        )
         _install_fake_mlx(monkeypatch, generate)
         [result] = MlxBackend("m").generate(["p"], HealthCheck)
         assert result.operational is False

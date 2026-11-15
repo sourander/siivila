@@ -116,11 +116,20 @@ class MlxBackend:
     def _chat(self, prompt: str) -> str:
         template = getattr(self._tokenizer, "chat_template", None)
         if template:
-            return self._tokenizer.apply_chat_template(
-                [{"role": "user", "content": prompt}],
-                tokenize=False,
-                add_generation_prompt=True,
-            )
+            messages = [{"role": "user", "content": prompt}]
+            try:
+                return self._tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    enable_thinking=False,
+                )
+            except TypeError:
+                return self._tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
         return prompt
 
     def _validated(
@@ -185,6 +194,8 @@ class VllmBackend:
 
 def _extract_json(text: str) -> str:
     """Best-effort extraction of a JSON object from model prose."""
+    if "</think>" in text:
+        text = text.rsplit("</think>", 1)[-1]
     start, end = text.find("{"), text.rfind("}")
     if start != -1 and end > start:
         return text[start : end + 1]

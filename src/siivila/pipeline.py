@@ -135,6 +135,10 @@ def run(args, config: CourseConfig, backend: ModelBackend) -> int:
                     result_file=result_filename,
                 )
             )
+            print(
+                f"grade: {outcome.filename}: synthesis {result.status} -> "
+                f"{result_filename}"
+            )
         except Exception:
             # Never propagate raw exception details: they may embed student text.
             criterion_results.append(
@@ -142,6 +146,10 @@ def run(args, config: CourseConfig, backend: ModelBackend) -> int:
                     filename=outcome.filename,
                     failure_reason=CRITERION_FAILURE_REASON,
                 )
+            )
+            print(
+                f"grade: {outcome.filename}: synthesis failure "
+                f"({CRITERION_FAILURE_REASON})"
             )
 
     manifest = RunManifest(
