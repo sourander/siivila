@@ -44,7 +44,7 @@ from .segmentation import sentence_spans
 
 #: Version of the extraction and segmentation rules. Any change that can
 #: alter extracted units or identifiers requires bumping this version.
-EXTRACTION_VERSION = "1.0"
+EXTRACTION_VERSION = "1.1"
 
 # Failure reason codes (safe to export; no student content).
 FAILURE_UNREADABLE = "unreadable-pdf"
@@ -69,6 +69,11 @@ _LINE_MERGE_TOLERANCE_PT = 2.0
 #: new paragraph.
 _PARAGRAPH_GAP_FACTOR = 1.35
 
+_REFERENCES_HEADINGS = {"lähteet", "references"}
+_APPENDICES_HEADINGS = {"liitteet", "appendices"}
+_APPENDIX_PREFIX_RE = re.compile(r"^(?:liite|appendix)\b", re.IGNORECASE)
+_REF_START_RE = re.compile(r"^\s*(?:\[(\d+)\]|(\d+)\.)\s+(.*)$")
+
 
 class Sentence(BaseModel):
     """One sentence: an exact span of its paragraph's canonical text."""
@@ -86,6 +91,7 @@ class Paragraph(BaseModel):
     text: str
     pages: list[int] = Field(min_length=1)
     sentences: list[Sentence]
+    subheading: str | None = None
 
 
 class Topic(BaseModel):
@@ -97,12 +103,22 @@ class Topic(BaseModel):
     paragraphs: list[Paragraph]
 
 
+class ReferenceEntry(BaseModel):
+    """One bibliography entry from the submission's references section."""
+
+    id: str
+    number: int | None = None
+    text: str
+    pages: list[int] = Field(min_length=1)
+
+
 class SubmissionExtraction(BaseModel):
     """Structured content of one submission. Never exported with the manifest."""
 
     submission: str
     extraction_version: str
     topics: list[Topic]
+    references: list[ReferenceEntry] = Field(default_factory=list)
 
 
 class ExtractionOutcome(BaseModel):
@@ -136,6 +152,7 @@ class _Heading:
     title: str
     page: int
     y: float | None
+    depth: int = 0
 
 
 def _matrix_multiply(m1, m2) -> tuple[float, ...]:
@@ -202,10 +219,10 @@ def _outline_headings(reader: PdfReader) -> list[_Heading] | None:
 
     headings: list[_Heading] = []
 
-    def walk(items) -> bool:
+    def walk(items, depth: int = 0) -> bool:
         for item in items:
             if isinstance(item, list):
-                if not walk(item):
+                if not walk(item, depth + 1):
                     return False
                 continue
             try:
@@ -216,7 +233,9 @@ def _outline_headings(reader: PdfReader) -> list[_Heading] | None:
             y = None
             if dest is not None and len(dest) > 3 and dest[3] is not None:
                 y = float(dest[3])
-            headings.append(_Heading(title=str(item.title), page=page, y=y))
+            headings.append(
+                _Heading(title=str(item.title), page=page, y=y, depth=depth)
+            )
         return True
 
     if not walk(outline):
@@ -339,6 +358,61 @@ def _split_paragraphs(
     return paragraphs
 
 
+def _is_references_heading(title: str) -> bool:
+    return title.strip().casefold() in _REFERENCES_HEADINGS
+
+
+def _is_appendices_heading(title: str) -> bool:
+    cleaned = title.strip()
+    return cleaned.casefold() in _APPENDICES_HEADINGS or bool(
+        _APPENDIX_PREFIX_RE.match(cleaned)
+    )
+
+
+def _extract_references(
+    content: list[_Line], median_gap: float | None, start_index: int = 0
+) -> list[ReferenceEntry]:
+    """Split bibliography lines into structured reference entries."""
+    groups: list[list[_Line]] = []
+    for line in content:
+        if not line.text.strip():
+            continue
+        previous = groups[-1][-1] if groups else None
+        starts_numbered = bool(_REF_START_RE.match(line.text))
+        is_gap_break = (
+            previous is not None
+            and previous.page == line.page
+            and median_gap is not None
+            and previous.y - line.y > median_gap * _PARAGRAPH_GAP_FACTOR
+        )
+        if previous is None or starts_numbered or is_gap_break:
+            groups.append([line])
+        else:
+            groups[-1].append(line)
+
+    entries: list[ReferenceEntry] = []
+    for offset, group in enumerate(groups, start=1):
+        mapped = _join_lines(group)
+        if not mapped.text:
+            continue
+        match = _REF_START_RE.match(mapped.text)
+        if match:
+            number = int(match.group(1) or match.group(2))
+            text = match.group(3).strip() or mapped.text
+        else:
+            number = None
+            text = mapped.text
+        entries.append(
+            ReferenceEntry(
+                id=f"ref-{start_index + offset}",
+                number=number,
+                text=text,
+                pages=sorted({line.page + 1 for line in group}),
+            )
+        )
+    return entries
+
+
 def _declaration_warnings(reader: PdfReader) -> list[str]:
     """Warn about missing PDF/A and PDF/UA XMP declarations.
 
@@ -419,41 +493,82 @@ def extract_submission(path: Path) -> ExtractionOutcome:
         return _failure(filename, FAILURE_HEADING_UNMAPPED, warnings)
 
     median_gap = _median_line_gap(lines)
+    top_sections: list[
+        tuple[_Heading, tuple[int, int], list[tuple[_Heading, tuple[int, int]]]]
+    ] = []
+    for heading, span in zip(headings, spans):
+        if heading.depth == 0 or not top_sections:
+            top_sections.append((heading, span, []))
+        else:
+            top_sections[-1][2].append((heading, span))
+
     topics: list[Topic] = []
+    references: list[ReferenceEntry] = []
     paragraph_count = 0
     sentence_count = 0
-    for index, (heading, (start, end)) in enumerate(zip(headings, spans)):
-        content_end = spans[index + 1][0] if index + 1 < len(spans) else len(lines)
-        content = lines[end + 1 : content_end]
+    for sec_index, (heading, (start, end), subheadings) in enumerate(top_sections):
+        if _is_appendices_heading(heading.title):
+            continue
+        section_end = (
+            top_sections[sec_index + 1][1][0]
+            if sec_index + 1 < len(top_sections)
+            else len(lines)
+        )
+        first_sub_start = subheadings[0][1][0] if subheadings else section_end
+        slices: list[tuple[str | None, list[_Line]]] = [
+            (None, lines[end + 1 : first_sub_start])
+        ]
+        for sub_idx, (sub_heading, (_sub_start, sub_end)) in enumerate(subheadings):
+            sub_content_end = (
+                subheadings[sub_idx + 1][1][0]
+                if sub_idx + 1 < len(subheadings)
+                else section_end
+            )
+            slices.append(
+                (sub_heading.title, lines[sub_end + 1 : sub_content_end])
+            )
+
+        if _is_references_heading(heading.title):
+            ref_lines = [line for _sub, content in slices for line in content]
+            references.extend(
+                _extract_references(ref_lines, median_gap, start_index=len(references))
+            )
+            continue
+
         paragraphs: list[Paragraph] = []
-        for group in _split_paragraphs(content, median_gap):
-            paragraph_count += 1
-            mapped = _join_lines(group)
-            sentences: list[Sentence] = []
-            for span_start, span_end in sentence_spans(mapped.text):
-                sentence_count += 1
-                sentences.append(
-                    Sentence(
-                        id=f"sent-{sentence_count}",
-                        start=span_start,
-                        end=span_end,
-                        pages=mapped.pages_between(span_start, span_end),
+        for subheading_title, content in slices:
+            for group in _split_paragraphs(content, median_gap):
+                paragraph_count += 1
+                mapped = _join_lines(group)
+                sentences: list[Sentence] = []
+                for span_start, span_end in sentence_spans(mapped.text):
+                    sentence_count += 1
+                    sentences.append(
+                        Sentence(
+                            id=f"sent-{sentence_count}",
+                            start=span_start,
+                            end=span_end,
+                            pages=mapped.pages_between(span_start, span_end),
+                        )
+                    )
+                paragraphs.append(
+                    Paragraph(
+                        id=f"par-{paragraph_count}",
+                        text=mapped.text,
+                        pages=sorted({line.page + 1 for line in group}),
+                        sentences=sentences,
+                        subheading=subheading_title,
                     )
                 )
-            paragraphs.append(
-                Paragraph(
-                    id=f"par-{paragraph_count}",
-                    text=mapped.text,
-                    pages=sorted({line.page + 1 for line in group}),
-                    sentences=sentences,
-                )
-            )
+        heading_pages = {heading.page + 1} | {
+            sub_h.page + 1 for sub_h, _ in subheadings
+        }
         topic_pages = sorted(
-            {heading.page + 1} | {page for par in paragraphs for page in par.pages}
+            heading_pages | {page for par in paragraphs for page in par.pages}
         )
         topics.append(
             Topic(
-                id=f"topic-{index + 1}",
+                id=f"topic-{len(topics) + 1}",
                 title=heading.title,
                 pages=topic_pages,
                 paragraphs=paragraphs,
@@ -468,5 +583,6 @@ def extract_submission(path: Path) -> ExtractionOutcome:
             submission=filename,
             extraction_version=EXTRACTION_VERSION,
             topics=topics,
+            references=references,
         ),
     )

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 import siivila.backends as backends
 from siivila.backends import (
+    DEFAULT_MAX_TOKENS,
     PRODUCTION_CONTEXT_LENGTH,
     BackendError,
     FakeBackend,
@@ -78,13 +79,19 @@ def _install_fake_vllm(monkeypatch, llm_instance):
 class _FakeLLM:
     """Stands in for vllm.LLM; serves queued responses, then repeats the last."""
 
-    def __init__(self):
+    def __init__(self, tokenizer=None):
         self.init_kwargs: dict | None = None
         self.responses: list[str] = []
         self.prompts_seen: list[str] = []
+        self.last_params = None
+        self._tokenizer = tokenizer
 
-    def generate(self, prompts, _params):
+    def get_tokenizer(self):
+        return self._tokenizer
+
+    def generate(self, prompts, params):
         self.prompts_seen.extend(prompts)
+        self.last_params = params
         return [_FakeRequestOutput(self.responses.pop(0)) for _ in prompts]
 
 
@@ -149,6 +156,19 @@ class TestVllmBackend:
         [result] = backend.generate(["health?"], HealthCheck)
         assert result.operational is False
         assert "did not match the required JSON schema" in llm.prompts_seen[1]
+
+    def test_chat_template_max_tokens_and_json_extraction(self, model_dir, monkeypatch):
+        llm = _install_fake_vllm(
+            monkeypatch, _FakeLLM(tokenizer=_FakeTokenizer(with_chat_template=True))
+        )
+        llm.responses = [
+            '<think>reasoning</think>\n{"operational": true, "message": "ok"}'
+        ]
+        backend = VllmBackend(model_dir)
+        [result] = backend.generate(["health?"], HealthCheck)
+        assert result.operational is True
+        assert llm.prompts_seen == ["CHAT::health?"]
+        assert llm.last_params.kwargs["max_tokens"] == DEFAULT_MAX_TOKENS
 
 
 class _FakeTokenizer:

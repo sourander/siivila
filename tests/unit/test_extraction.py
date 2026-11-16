@@ -331,3 +331,114 @@ def test_renamed_file_is_a_distinct_submission(two_topic_pdf: Path, tmp_path: Pa
     assert first.model_dump(exclude={"submission"}) == second.model_dump(
         exclude={"submission"}
     )
+
+
+def test_nested_subheadings_grouped_under_top_level_topic(tmp_path: Path):
+    page = [
+        DrawnLine("3 Koneoppiminen", y=770, size=HEADING_SIZE),
+        DrawnLine("3.1 Mitä tehtiin ja teoriaa", y=770 - P, size=HEADING_SIZE),
+        DrawnLine("Theory sentence one. Theory sentence two.", y=770 - 2 * P),
+        DrawnLine("3.2 Tyypit - Tehtävät", y=770 - 3 * P, size=HEADING_SIZE),
+        DrawnLine("Exercise sentence one.", y=770 - 4 * P),
+    ]
+    path = build_pdf(
+        tmp_path / "nested.pdf",
+        [page],
+        outline=[
+            OutlineEntry(
+                "3 Koneoppiminen",
+                page=0,
+                y=770,
+                children=[
+                    OutlineEntry("3.1 Mitä tehtiin ja teoriaa", page=0, y=770 - P),
+                    OutlineEntry("3.2 Tyypit - Tehtävät", page=0, y=770 - 3 * P),
+                ],
+            )
+        ],
+        xmp=XMP_BOTH,
+    )
+    outcome = extract_submission(path)
+    assert outcome.status == "success"
+    extraction = outcome.extraction
+    assert extraction is not None
+    assert extraction.extraction_version == "1.1"
+    assert [t.title for t in extraction.topics] == ["3 Koneoppiminen"]
+    topic = extraction.topics[0]
+    assert [p.subheading for p in topic.paragraphs] == [
+        "3.1 Mitä tehtiin ja teoriaa",
+        "3.2 Tyypit - Tehtävät",
+    ]
+    assert [p.text for p in topic.paragraphs] == [
+        "Theory sentence one. Theory sentence two.",
+        "Exercise sentence one.",
+    ]
+    assert [s.id for p in topic.paragraphs for s in p.sentences] == [
+        "sent-1",
+        "sent-2",
+        "sent-3",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("refs_heading", "apps_heading", "sub_app_heading"),
+    [
+        ("Lähteet", "Liitteet", "Liite 1 Muistiinpanot"),
+        ("References", "Appendices", "Appendix A Cheat Sheet"),
+    ],
+)
+def test_references_extracted_and_appendices_excluded(
+    tmp_path: Path, refs_heading: str, apps_heading: str, sub_app_heading: str
+):
+    page1 = [
+        DrawnLine("1 Johdanto", y=770, size=HEADING_SIZE),
+        DrawnLine("Intro claims something [1].", y=770 - P),
+        DrawnLine("More detail follows [2].", y=770 - P - G),
+        DrawnLine(refs_heading, y=770 - 2 * P - G, size=HEADING_SIZE),
+        DrawnLine("1. Virtanen A. Ensimmäinen lähde-", y=770 - 3 * P - G),
+        DrawnLine("teos. 2026.", y=770 - 3 * P - 2 * G),
+    ]
+    page2 = [
+        # Starts right at top of page 2: must still split from reference 1.
+        DrawnLine("2. Korhonen B. Toinen lähde. 2025.", y=770),
+        DrawnLine(apps_heading, y=770 - P, size=HEADING_SIZE),
+        DrawnLine(sub_app_heading, y=770 - 2 * P, size=HEADING_SIZE),
+        DrawnLine("Appendix memo sentence that must not be graded.", y=770 - 3 * P),
+    ]
+    path = build_pdf(
+        tmp_path / f"sections-{refs_heading}.pdf",
+        [page1, page2],
+        outline=[
+            OutlineEntry("1 Johdanto", page=0, y=770),
+            OutlineEntry(refs_heading, page=0, y=770 - 2 * P - G),
+            OutlineEntry(
+                apps_heading,
+                page=1,
+                y=770 - P,
+                children=[OutlineEntry(sub_app_heading, page=1, y=770 - 2 * P)],
+            ),
+        ],
+        xmp=XMP_BOTH,
+    )
+    outcome = extract_submission(path)
+    assert outcome.status == "success"
+    extraction = outcome.extraction
+    assert extraction is not None
+    assert [t.title for t in extraction.topics] == ["1 Johdanto"]
+    assert len(extraction.references) == 2
+    assert extraction.references[0].id == "ref-1"
+    assert extraction.references[0].number == 1
+    assert extraction.references[0].text == "Virtanen A. Ensimmäinen lähdeteos. 2026."
+    assert extraction.references[0].pages == [1]
+    assert extraction.references[1].id == "ref-2"
+    assert extraction.references[1].number == 2
+    assert extraction.references[1].text == "Korhonen B. Toinen lähde. 2025."
+    assert extraction.references[1].pages == [2]
+    all_sentences = [
+        p.text[s.start : s.end]
+        for t in extraction.topics
+        for p in t.paragraphs
+        for s in p.sentences
+    ]
+    assert all("Appendix memo" not in s for s in all_sentences)
+
+

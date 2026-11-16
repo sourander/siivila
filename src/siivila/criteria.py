@@ -1,5 +1,6 @@
 """Criterion configuration, prompt building, validation, and aggregation."""
 
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -7,11 +8,13 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .config import CourseConfig
-from .extraction import SubmissionExtraction, Topic
+from .extraction import ReferenceEntry, SubmissionExtraction, Topic
 
 CRITERIA_DIR = Path(__file__).resolve().parents[2] / "criteria"
 
 StatusLabel = Literal["met", "not_met", "uncertain"]
+
+_CITATION_BRACKET_RE = re.compile(r"\[(\d+(?:\s*[;,–-]\s*\d+)*)\]")
 
 
 class CriterionConfig(BaseModel):
@@ -143,20 +146,60 @@ class CriterionResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+def _cited_reference_numbers(text: str) -> set[int]:
+    """Extract integer reference numbers from bracketed citations like [1], [1; 3], [9–11]."""
+    cited: set[int] = set()
+    for match in _CITATION_BRACKET_RE.finditer(text):
+        for item in re.split(r"[;,]", match.group(1)):
+            part = item.strip()
+            if not part:
+                continue
+            range_parts = re.split(r"[–-]", part)
+            if len(range_parts) == 2:
+                start, end = int(range_parts[0].strip()), int(range_parts[1].strip())
+                if start <= end and end - start <= 100:
+                    cited.update(range(start, end + 1))
+            else:
+                cited.add(int(part))
+    return cited
+
+
 def build_topic_prompt(
     topic: Topic,
     criterion: CriterionConfig | None = None,
     course_config: CourseConfig | None = None,
+    references: list[ReferenceEntry] | None = None,
 ) -> str:
     """Build the evaluation prompt for a single topic."""
     crit = criterion or _default_criterion()
     definition = format_criterion_definition(crit, course_config)
-    lines = [
-        f"{sentence.id}: {paragraph.text[sentence.start:sentence.end]}"
-        for paragraph in topic.paragraphs
-        for sentence in paragraph.sentences
-    ]
+    lines: list[str] = []
+    cited_numbers: set[int] = set()
+    current_subheading: str | None = None
+    for paragraph in topic.paragraphs:
+        if not paragraph.sentences:
+            continue
+        if paragraph.subheading != current_subheading:
+            current_subheading = paragraph.subheading
+            if current_subheading is not None:
+                lines.append(f"Subheading: {current_subheading}")
+        lines.append(f"[{paragraph.id}]")
+        for sentence in paragraph.sentences:
+            span_text = paragraph.text[sentence.start : sentence.end]
+            lines.append(f"{sentence.id}: {span_text}")
+            cited_numbers.update(_cited_reference_numbers(span_text))
     body = "\n".join(lines) if lines else "(no sentences)"
+
+    refs_block = ""
+    if references and cited_numbers:
+        matched = [
+            f"[{ref.number}] {ref.text}"
+            for ref in references
+            if ref.number is not None and ref.number in cited_numbers
+        ]
+        if matched:
+            refs_block = "\n\nReferences cited in this topic:\n" + "\n".join(matched)
+
     return (
         f"{definition}\n\n"
         f"Identify every passage in the topic below that demonstrates {crit.id}. "
@@ -167,7 +210,7 @@ def build_topic_prompt(
         f'"classification": "{crit.id}", "rationale": "...", "uncertain": false}}]}} '
         '(or {"findings": []} if none).\n\n'
         f"Topic: {topic.title}\n"
-        f"Sentences:\n{body}"
+        f"Sentences:\n{body}{refs_block}"
     )
 
 
@@ -176,11 +219,19 @@ def build_submission_prompts(
     criterion: CriterionConfig | None = None,
     course_config: CourseConfig | None = None,
 ) -> list[str]:
-    """Build one prompt per topic for a submission, or [] if the criterion is skipped."""
+    """Build one prompt per non-empty topic for a submission, or [] if skipped."""
     crit = criterion or _default_criterion()
     if not is_criterion_applicable(crit, course_config):
         return []
-    return [build_topic_prompt(topic, crit, course_config) for topic in extraction.topics]
+    non_empty_topics = [
+        topic
+        for topic in extraction.topics
+        if any(paragraph.sentences for paragraph in topic.paragraphs)
+    ]
+    return [
+        build_topic_prompt(topic, crit, course_config, references=extraction.references)
+        for topic in non_empty_topics
+    ]
 
 
 def sentence_lookup(extraction: SubmissionExtraction) -> dict[str, str]:

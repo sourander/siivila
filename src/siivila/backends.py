@@ -75,6 +75,28 @@ def _retry_prompt(prompt: str) -> str:
     )
 
 
+def _format_chat_prompt(tokenizer: object, prompt: str) -> str:
+    """Apply the tokenizer's chat template when present, disabling thinking when supported."""
+    template = getattr(tokenizer, "chat_template", None)
+    if template:
+        messages = [{"role": "user", "content": prompt}]
+        apply_fn = getattr(tokenizer, "apply_chat_template")
+        try:
+            return apply_fn(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
+            )
+        except TypeError:
+            return apply_fn(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+    return prompt
+
+
 class MlxBackend:
     """Local Apple Silicon inference via mlx-lm.
 
@@ -114,23 +136,7 @@ class MlxBackend:
         )
 
     def _chat(self, prompt: str) -> str:
-        template = getattr(self._tokenizer, "chat_template", None)
-        if template:
-            messages = [{"role": "user", "content": prompt}]
-            try:
-                return self._tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                    enable_thinking=False,
-                )
-            except TypeError:
-                return self._tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-        return prompt
+        return _format_chat_prompt(self._tokenizer, prompt)
 
     def _validated(
         self, mlx_generate: Callable[..., str], prompt: str, text: str, schema: type[T]
@@ -169,25 +175,32 @@ class VllmBackend:
 
         params = SamplingParams(
             temperature=0.0,
+            max_tokens=DEFAULT_MAX_TOKENS,
             structured_outputs=StructuredOutputsParams(json=schema.model_json_schema()),
         )
-        outputs = self._llm.generate(prompts, params)
+        formatted = [self._chat(prompt) for prompt in prompts]
+        outputs = self._llm.generate(formatted, params)
         results: list[T] = []
         for prompt, output in zip(prompts, outputs, strict=True):
             results.append(self._validated(prompt, output.outputs[0].text, schema, params))
         return results
 
+    def _chat(self, prompt: str) -> str:
+        get_tokenizer = getattr(self._llm, "get_tokenizer", None)
+        tokenizer = get_tokenizer() if callable(get_tokenizer) else None
+        return _format_chat_prompt(tokenizer, prompt)
+
     def _validated(self, prompt: str, text: str, schema: type[T], params: object) -> T:
         for attempt in range(DEFAULT_MAX_RETRIES + 1):
             try:
-                return schema.model_validate_json(text)
+                return schema.model_validate_json(_extract_json(text))
             except ValidationError:
                 if attempt >= DEFAULT_MAX_RETRIES:
                     raise BackendError(
                         f"model produced schema-invalid output {attempt + 1} times "
                         f"for schema {schema.__name__}"
                     ) from None
-                retry = self._llm.generate([_retry_prompt(prompt)], params)
+                retry = self._llm.generate([self._chat(_retry_prompt(prompt))], params)
                 text = retry[0].outputs[0].text
         raise BackendError("unreachable")
 

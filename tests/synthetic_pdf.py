@@ -6,7 +6,7 @@ Helvetica font at explicit positions, outlines carry /XYZ destinations like
 Typst's, and XMP declaration snippets mimic (or omit) pdfaid/pdfuaid.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pypdf import PdfWriter
@@ -61,11 +61,12 @@ class DrawnLine:
 
 @dataclass
 class OutlineEntry:
-    """An outline item: title, 0-based target page, destination y."""
+    """An outline item: title, 0-based target page, destination y, optional children."""
 
     title: str
     page: int
     y: float
+    children: list["OutlineEntry"] = field(default_factory=list)
 
 
 def _escape(text: str) -> str:
@@ -118,12 +119,18 @@ def build_pdf(
         page[NameObject("/Contents")] = writer._add_object(_content_stream(lines))
         page_refs.append(page)
 
-    for entry in outline or []:
-        writer.add_outline_item(
-            title=entry.title,
-            page_number=page_refs[entry.page],
-            fit=Fit.xyz(left=MARGIN_X, top=entry.y, zoom=None),
-        )
+    def add_entries(entries: list[OutlineEntry], parent=None) -> None:
+        for entry in entries:
+            item_ref = writer.add_outline_item(
+                title=entry.title,
+                page_number=page_refs[entry.page],
+                parent=parent,
+                fit=Fit.xyz(left=MARGIN_X, top=entry.y, zoom=None),
+            )
+            if entry.children:
+                add_entries(entry.children, parent=item_ref)
+
+    add_entries(outline or [])
 
     if xmp is not None:
         stream = DecodedStreamObject()

@@ -25,7 +25,13 @@ from siivila.criteria import (
     sentence_lookup,
     validate_findings,
 )
-from siivila.extraction import Paragraph, Sentence, SubmissionExtraction, Topic
+from siivila.extraction import (
+    Paragraph,
+    ReferenceEntry,
+    Sentence,
+    SubmissionExtraction,
+    Topic,
+)
 
 VALID_CRITERION = {
     "id": "synthesis",
@@ -180,6 +186,62 @@ def test_prompt_builder_includes_sentence_ids_and_isolates_submission():
     for prompt in prompts_a:
         assert "BetaSecret" not in prompt
         assert "sub-b.pdf" not in prompt
+
+
+def test_prompt_builder_skips_empty_topics_and_includes_subheadings_paragraphs_and_refs():
+    s1 = "First claim [1; 3]."
+    s2 = "Range claim [9–10]."
+    ext = SubmissionExtraction(
+        submission="sub-a.pdf",
+        extraction_version="1.1",
+        topics=[
+            Topic(id="topic-1", title="Empty Topic", pages=[1], paragraphs=[]),
+            Topic(
+                id="topic-2",
+                title="3 Koneoppiminen",
+                pages=[2],
+                paragraphs=[
+                    Paragraph(
+                        id="par-1",
+                        text=s1,
+                        pages=[2],
+                        subheading="3.1 Mitä tehtiin ja teoriaa",
+                        sentences=[Sentence(id="sent-1", start=0, end=len(s1), pages=[2])],
+                    ),
+                    Paragraph(
+                        id="par-2",
+                        text=s2,
+                        pages=[2],
+                        subheading="3.2 Tehtävät",
+                        sentences=[Sentence(id="sent-2", start=0, end=len(s2), pages=[2])],
+                    ),
+                ],
+            ),
+        ],
+        references=[
+            ReferenceEntry(id="ref-1", number=1, text="Source One.", pages=[10]),
+            ReferenceEntry(id="ref-2", number=2, text="Uncited Source Two.", pages=[10]),
+            ReferenceEntry(id="ref-3", number=3, text="Source Three.", pages=[10]),
+            ReferenceEntry(id="ref-9", number=9, text="Source Nine.", pages=[10]),
+            ReferenceEntry(id="ref-10", number=10, text="Source Ten.", pages=[10]),
+        ],
+    )
+    syn = load_criterion(CRITERIA_DIR / "synthesis.yaml")
+    prompts = build_submission_prompts(ext, syn)
+    assert len(prompts) == 1
+    prompt = prompts[0]
+    assert "Empty Topic" not in prompt
+    assert "Topic: 3 Koneoppiminen" in prompt
+    assert "Subheading: 3.1 Mitä tehtiin ja teoriaa" in prompt
+    assert "[par-1]\nsent-1: First claim [1; 3]." in prompt
+    assert "Subheading: 3.2 Tehtävät" in prompt
+    assert "[par-2]\nsent-2: Range claim [9–10]." in prompt
+    assert "References cited in this topic:" in prompt
+    assert "[1] Source One." in prompt
+    assert "[3] Source Three." in prompt
+    assert "[9] Source Nine." in prompt
+    assert "[10] Source Ten." in prompt
+    assert "Uncited Source Two." not in prompt
 
 
 def test_course_placeholders_interpolated_and_optional_course_book_skipped():
