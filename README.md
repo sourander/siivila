@@ -137,6 +137,12 @@ uv run grade \
   --course-config course_configs/course-a.yaml
 ```
 
+Local interactive review of generated criterion results (launches a NiceGUI interface to inspect highlighted sentences and add, edit, or delete evidence instances in `<stem>.<criterion>.json`):
+
+```bash
+uv run review --dir testdata/local/out
+```
+
 Production on Roihu (vLLM backend; no uv — the batch job runs the repo-root
 [grade.py](grade.py) with the scratch venv's interpreter):
 

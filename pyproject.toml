@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 grade = "siivila.cli:main"
+review = "siivila.review:main"
 
 [project.optional-dependencies]
 observability = [
@@ -28,6 +29,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "mlx-lm>=0.32.2",
+    "nicegui>=4.0.0",
     "pytest>=9.2.0",
 ]
 
